@@ -70,7 +70,7 @@ Pillow
 ### 3️⃣ Tải model YOLOv8-face
 Tải file model YOLOv8 đã huấn luyện phát hiện khuôn mặt:
 
-👉 [yolov8n-face.pt (GitHub)]([https://github.com/derronqi/yolov8-face/releases/download/v0.0.1/yolov8n-face.pt](https://drive.google.com/file/d/1qcr9DbgsX3ryrz2uU8w4Xm3cOrRywXqb/view))
+👉 [yolov8n-face.pt (GitHub)](https://drive.google.com/file/d/1qcr9DbgsX3ryrz2uU8w4Xm3cOrRywXqb/view)
 
 Đặt file đó vào thư mục gốc của dự án:
 ```

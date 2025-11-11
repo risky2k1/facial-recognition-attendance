@@ -37,12 +37,16 @@ def seed_users():
     c = conn.cursor()
     users = [
         ("tuan", "1234", "faces/user1"),
-        ("minh", "1234", "faces/user2")
+        ("minh", "1234", "faces/user2"),
     ]
     for u in users:
         try:
-            c.execute("INSERT INTO users (username, password, face_dir) VALUES (?, ?, ?)", u)
+            c.execute(
+                "INSERT INTO users (username, password, face_dir) VALUES (?, ?, ?)",
+                u,
+            )
         except sqlite3.IntegrityError:
+            # đã tồn tại thì bỏ qua
             pass
     conn.commit()
     conn.close()
@@ -51,8 +55,10 @@ def seed_users():
 def log_attendance(user_id, is_valid, message):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO attendance_logs (user_id, timestamp, is_valid, message) VALUES (?, ?, ?, ?)",
-              (user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_valid, message))
+    c.execute(
+        "INSERT INTO attendance_logs (user_id, timestamp, is_valid, message) VALUES (?, ?, ?, ?)",
+        (user_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_valid, message),
+    )
     conn.commit()
     conn.close()
 
@@ -79,7 +85,10 @@ class LoginWindow:
 
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("SELECT id, face_dir FROM users WHERE username=? AND password=?", (username, password))
+        c.execute(
+            "SELECT id, face_dir FROM users WHERE username=? AND password=?",
+            (username, password),
+        )
         user = c.fetchone()
         conn.close()
 
@@ -100,90 +109,178 @@ class AttendanceApp:
         self.username = username
         self.face_dir = face_dir
         self.root.title(f"Hệ thống chấm công - {username}")
-        self.root.geometry("900x600")
+        self.root.geometry("900x650")
 
         self.video_label = tk.Label(root)
         self.video_label.pack()
 
-        self.info_label = tk.Label(root, text=f"Xin chào, {username}. Đang mở camera...", font=("Arial", 14))
+        self.info_label = tk.Label(
+            root,
+            text=f"Xin chào, {username}. Hãy căn mặt vào khung, sau đó bấm 'Chấm công'.",
+            font=("Arial", 12),
+        )
         self.info_label.pack(pady=10)
+
+        # Nút chấm công (chụp + so sánh)
+        btn_frame = tk.Frame(root)
+        btn_frame.pack(pady=10)
+
+        self.capture_btn = tk.Button(
+            btn_frame,
+            text="📸 Chấm công",
+            font=("Arial", 11),
+            command=self.capture_and_verify,
+        )
+        self.capture_btn.pack(side=tk.LEFT, padx=10)
+
+        self.exit_btn = tk.Button(
+            btn_frame, text="Thoát", font=("Arial", 11), command=self.on_close
+        )
+        self.exit_btn.pack(side=tk.LEFT, padx=10)
 
         self.cap = cv2.VideoCapture(0)
         self.running = True
         self.model = YOLO(MODEL_PATH)
 
+        # frame mới nhất từ camera
+        self.last_frame = None
+
         # Load ảnh preset của user
         self.presets = {}
         if os.path.exists(self.face_dir):
             for filename in os.listdir(self.face_dir):
-                if filename.lower().endswith(('.jpg', '.png', '.jpeg')):
+                if filename.lower().endswith((".jpg", ".jpeg", ".png")):
                     name = os.path.splitext(filename)[0]
                     self.presets[name] = os.path.join(self.face_dir, filename)
         else:
-            messagebox.showerror("Lỗi", f"Không tìm thấy thư mục khuôn mặt: {self.face_dir}")
+            messagebox.showerror(
+                "Lỗi", f"Không tìm thấy thư mục khuôn mặt: {self.face_dir}"
+            )
+
+        print("Presets loaded:", self.presets)  # debug
 
         self.update_frame()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def update_frame(self):
+        """Chỉ hiển thị video từ camera, KHÔNG detect ở đây."""
+        if not self.running:
+            return
+
         ret, frame = self.cap.read()
         if not ret:
             self.info_label.config(text="Không đọc được hình từ camera.")
+        else:
+            self.last_frame = frame.copy()
+
+            img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img_pil = Image.fromarray(img_rgb)
+            imgtk = ImageTk.PhotoImage(image=img_pil)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+        self.root.after(30, self.update_frame)
+
+    def capture_and_verify(self):
+        """Chụp 1 frame hiện tại và so sánh với preset."""
+        if self.last_frame is None:
+            messagebox.showerror("Lỗi", "Chưa có frame từ camera, vui lòng thử lại.")
             return
 
-        results = self.model(frame, stream=True)
-        recognized_name = None
+        frame = self.last_frame.copy()
 
-        for r in results:
-            for box in r.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                face_crop = frame[y1:y2, x1:x2]
-                cv2.imwrite("temp_face.jpg", face_crop)
+        # Chạy YOLO detect mặt trên frame hiện tại
+        results = self.model(frame, stream=False)
 
-                # giá trị mặc định
-                color = (100, 100, 100)
-                label = "Detecting..."
+        # Nếu không có mặt
+        if len(results[0].boxes) == 0:
+            self.info_label.config(text="❌ Không tìm thấy khuôn mặt trong ảnh chụp.")
+            log_attendance(self.user_id, 0, "Không tìm thấy khuôn mặt")
+            return
 
-                # So sánh với preset
-                for name, preset_path in self.presets.items():
-                    try:
-                        result = DeepFace.verify("temp_face.jpg", preset_path, model_name="ArcFace", enforce_detection=False)
-                        if result["verified"]:
-                            recognized_name = name
-                            log_attendance(self.user_id, 1, f"Đã xác thực {name}")
-                            color = (0, 255, 0)
-                            label = f"{name}"
-                            break
-                        else:
-                            color = (0, 0, 255)
-                            label = "Unknown"
-                            log_attendance(self.user_id, 0, "Không trùng khớp khuôn mặt")
-                    except Exception:
-                        color = (255, 255, 0)
-                        label = "Error"
+        # Chọn 1 khuôn mặt (ví dụ: khuôn mặt lớn nhất)
+        best_box = None
+        best_area = 0
+        for box in results[0].boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            area = (x2 - x1) * (y2 - y1)
+            if area > best_area:
+                best_area = area
+                best_box = (x1, y1, x2, y2)
 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(frame, label, (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        x1, y1, x2, y2 = best_box
+        face_crop = frame[y1:y2, x1:x2]
 
-        if recognized_name:
-            self.info_label.config(text=f"✅ Xác thực thành công: {recognized_name}")
+        # Lưu tạm khuôn mặt
+        temp_path = "temp_face.jpg"
+        cv2.imwrite(temp_path, face_crop)
+
+        # Mặc định
+        verified = False
+        matched_name = None
+        confidence = None
+
+        if not self.presets:
+            self.info_label.config(
+                text="⚠️ Không có ảnh preset nào cho user này. Vui lòng thêm ảnh vào thư mục."
+            )
+            log_attendance(self.user_id, 0, "Không có preset khuôn mặt")
         else:
-            self.info_label.config(text=f"⏳ Đang quét khuôn mặt...")
+            # So sánh với từng preset
+            for name, preset_path in self.presets.items():
+                try:
+                    result = DeepFace.verify(
+                        temp_path,
+                        preset_path,
+                        model_name="ArcFace",
+                        enforce_detection=False,
+                    )
+                    # DeepFace trả về distance + threshold, ta dùng verified luôn
+                    if result.get("verified"):
+                        verified = True
+                        matched_name = name
+                        confidence = 1 - float(result.get("distance", 0.0))
+                        break
+                except Exception as e:
+                    print("DeepFace error:", e)
+                    continue
 
-        # Cập nhật GUI
-        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img_pil = Image.fromarray(img_rgb)
-        imgtk = ImageTk.PhotoImage(image=img_pil)
-        self.video_label.imgtk = imgtk
-        self.video_label.configure(image=imgtk)
+            # Cập nhật UI + log
+            if verified:
+                msg = f"✅ Xác thực thành công: {matched_name}"
+                self.info_label.config(text=msg)
+                log_attendance(self.user_id, 1, msg)
+                color = (0, 255, 0)
+                label = matched_name
+            else:
+                msg = "❌ Không trùng khớp với preset khuôn mặt."
+                self.info_label.config(text=msg)
+                log_attendance(self.user_id, 0, msg)
+                color = (0, 0, 255)
+                label = "Unknown"
 
-        if self.running:
-            self.root.after(30, self.update_frame)
+            # Vẽ khung + label lên frame chụp để hiển thị kết quả
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(
+                frame,
+                label,
+                (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                color,
+                2,
+            )
+
+            img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img_pil = Image.fromarray(img_rgb)
+            imgtk = ImageTk.PhotoImage(image=img_pil)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
 
     def on_close(self):
         self.running = False
-        self.cap.release()
+        if self.cap is not None:
+            self.cap.release()
         self.root.destroy()
 
 # --- Main ---

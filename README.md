@@ -1,65 +1,61 @@
-# 🧠 Facial Recognition Attendance System (YOLO + DeepFace + FastAPI)
+# 🧠 Face Attendance System (YOLO + DeepFace + Tkinter)
 
-## 🧾 Overview
-This project is an **offline facial-recognition attendance system** powered by **YOLO** (for face detection) and **DeepFace** (for face verification/recognition).  
-It can run locally with a GUI or expose REST APIs (via **FastAPI**) for integration with other systems — e.g., HR or employee management apps.
+## 🧾 Giới thiệu
+**Face Attendance System** là một ứng dụng **chấm công bằng khuôn mặt chạy offline**, sử dụng:
+- **YOLOv8** để phát hiện khuôn mặt.
+- **DeepFace** (ArcFace backend) để xác thực danh tính người dùng.
+- **Tkinter GUI** để tạo giao diện trực quan.
 
----
-
-## 🚀 Features
-- **YOLOv8 Face Detection:** Real-time face detection via YOLO (CPU/GPU).
-- **DeepFace Recognition:** Face embedding + verification (supports ArcFace, Facenet, VGG-Face, etc.).
-- **SQLite-based logging:** Records each check-in with `user_id`, `timestamp`, `is_valid`, and `message`.
-- **FastAPI microservice:** Allows other apps to call face verification via HTTP API.
-- **Optional GUI (Tkinter):** For local interactive use and registration.
-- **Offline-first:** Runs fully on local machine — no cloud dependency.
+Người dùng đăng nhập, bật camera, chụp ảnh khuôn mặt và hệ thống sẽ xác thực khuôn mặt đó dựa trên các ảnh mẫu (preset) được lưu sẵn của từng nhân viên.
 
 ---
 
-## 🧱 Architecture
+## 🚀 Tính năng chính
+- **Đăng nhập người dùng:** xác thực tài khoản từ SQLite.
+- **Chụp ảnh khuôn mặt qua camera** khi người dùng bấm nút "📸 Chấm công".
+- **Phát hiện khuôn mặt bằng YOLOv8.**
+- **So khớp khuôn mặt với preset bằng DeepFace (ArcFace).**
+- **Ghi log chấm công** (thời gian, kết quả, ghi chú) vào cơ sở dữ liệu SQLite.
+- **Chạy hoàn toàn offline** — không cần kết nối Internet.
+
+---
+
+## 🧱 Cấu trúc dự án
+
 ```
-📦 face-attendance/
+face-attendance/
 │
-├── faces/                 # Stored reference face images (by user)
-│   ├── user_1/
-│   │   └── tuan.jpg
-│   └── user_2/
-│       └── minh.jpg
+├── faces/                     # Thư mục chứa ảnh preset khuôn mặt của từng user
+│   ├── user1/
+│   │   ├── user1-1.png
+│   │   └── user1-2.png
+│   └── user2/
+│       ├── user2-1.png
+│       └── user2-2.png
 │
-├── yolov8n-face.pt        # YOLO model weights (for detection)
-├── database.db            # SQLite database (auto-created)
+├── yolov8n-face.pt            # Model YOLOv8 dùng để phát hiện khuôn mặt
+├── database.db                # SQLite database (tự động tạo nếu chưa có)
 │
-├── app/
-│   ├── main.py            # FastAPI microservice entry
-│   ├── recognize.py       # Core logic (YOLO + DeepFace)
-│   ├── gui.py             # Tkinter GUI (optional)
-│   ├── db.py              # SQLite database helpers
-│   ├── schemas.py         # Pydantic schemas for API
-│   └── utils.py           # Common utilities
-│
-├── requirements.txt
-├── README.md
-└── .gitignore
+├── main.py                    # File chính (GUI + xử lý nhận diện)
+├── requirements.txt            # Danh sách thư viện cần cài
+└── README.md
 ```
 
 ---
 
-## ⚙️ Installation
+## ⚙️ Cài đặt môi trường
+
+### 1️⃣ Tạo môi trường ảo và cài thư viện
 ```bash
-git clone <repo-url>
-cd face-attendance
-
-# Create venv (Python 3.10 recommended)
 python -m venv venv
-venv\Scripts\activate  # Windows
-# or
-source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate        # Windows
+# hoặc
+source venv/bin/activate       # Linux / macOS
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Example requirements.txt
+### 2️⃣ File `requirements.txt` mẫu
 ```text
 ultralytics==8.3.13
 deepface==0.0.93
@@ -69,125 +65,103 @@ torchvision
 pandas
 numpy
 Pillow
-fastapi
-uvicorn
+```
+
+### 3️⃣ Tải model YOLOv8-face
+Tải file model YOLOv8 đã huấn luyện phát hiện khuôn mặt:
+
+👉 [yolov8n-face.pt (GitHub)](https://github.com/derronqi/yolov8-face/releases/download/v0.0.1/yolov8n-face.pt)
+
+Đặt file đó vào thư mục gốc của dự án:
+```
+face-attendance/yolov8n-face.pt
 ```
 
 ---
 
-## ⚙️ Configuration
-You can define a JSON or YAML config file:
-```yaml
-model_path: yolov8n-face.pt
-deepface_backend: ArcFace
-recognition_threshold: 0.45
-db_path: database.db
-faces_dir: faces/
-```
+## 💻 Cách sử dụng
 
----
+### 🔹 1. Chuẩn bị dữ liệu
+- Mỗi người dùng có 1 thư mục riêng trong `faces/`.
+- Bên trong chứa các ảnh khuôn mặt rõ nét, chính diện:
+  ```
+  faces/user1/user1-1.png
+  faces/user1/user1-2.png
+  ```
 
-## 💻 Run modes
-
-### 🧍 GUI Local Mode
+### 🔹 2. Chạy chương trình
 ```bash
-python app/gui.py
+python main.py
 ```
-- Opens camera.
-- Detects & verifies faces in real-time.
-- Logs attendance to `database.db`.
+Ứng dụng sẽ:
+- Tự khởi tạo `database.db` và thêm tài khoản mẫu:
+  - `username: tuan` → `faces/user1`
+  - `username: minh` → `faces/user2`
+- Mở cửa sổ đăng nhập.
 
-### ⚙️ API Server Mode (FastAPI)
-```bash
-uvicorn app.main:app --reload --port 8000
+### 🔹 3. Đăng nhập
+Nhập:
 ```
-
-Then visit [http://localhost:8000/docs](http://localhost:8000/docs) for interactive API docs.
-
----
-
-## 🧩 Example FastAPI Endpoints
-
-### 1️⃣ Verify Face (Attendance Check)
-**POST** `/api/verify`
-
-**Request:**
-```json
-{
-  "user_id": 1,
-  "image_base64": "<base64-encoded-face-image>"
-}
+Username: tuan
+Password: 1234
 ```
 
-**Response:**
-```json
-{
-  "verified": true,
-  "confidence": 0.87,
-  "timestamp": "2025-11-11T10:45:02",
-  "message": "Face matched successfully"
-}
-```
-
-### 2️⃣ List Attendance Logs
-**GET** `/api/logs`
-
-**Response:**
-```json
-[
-  {
-    "user_id": 1,
-    "timestamp": "2025-11-11T10:45:02",
-    "is_valid": 1,
-    "message": "Face matched successfully"
-  }
-]
-```
+### 🔹 4. Giao diện chấm công
+Sau khi đăng nhập:
+- Camera bật lên (chỉ hiển thị, chưa detect).
+- Căn mặt vào giữa khung hình → bấm **📸 Chấm công**.
+- Hệ thống:
+  - Dò khuôn mặt trong ảnh chụp.
+  - So sánh với ảnh preset tương ứng.
+  - Hiển thị kết quả:
+    - ✅ Nếu khớp → xác thực thành công, log được lưu.
+    - ❌ Nếu không khớp → thông báo lỗi & lưu log thất bại.
 
 ---
 
-## 🧠 How It Works
-1. **YOLOv8** detects the face region.
-2. The detected face is cropped and aligned.
-3. **DeepFace** computes embedding vector and compares with stored reference images.
-4. If below threshold → `is_valid = 1` → save to `attendance_logs`.
-5. API returns verification result.
+## 🗄️ Cấu trúc cơ sở dữ liệu
+
+### Bảng `users`
+| Cột | Kiểu dữ liệu | Mô tả |
+|-----|---------------|------|
+| id | INTEGER | Khóa chính |
+| username | TEXT | Tên đăng nhập |
+| password | TEXT | Mật khẩu |
+| face_dir | TEXT | Đường dẫn thư mục ảnh preset |
+
+### Bảng `attendance_logs`
+| Cột | Kiểu dữ liệu | Mô tả |
+|-----|---------------|------|
+| id | INTEGER | Khóa chính |
+| user_id | INTEGER | ID người dùng |
+| timestamp | TEXT | Thời gian chấm công |
+| is_valid | INTEGER | 1: thành công, 0: thất bại |
+| message | TEXT | Ghi chú / kết quả |
 
 ---
 
-## 🗄️ SQLite Database Schema
-### Table: `users`
-| id | username | password | face_dir |
-|----|-----------|-----------|-----------|
+## 🧠 Cơ chế hoạt động
 
-### Table: `attendance_logs`
-| id | user_id | timestamp | is_valid | message |
-
----
-
-## 🔒 Privacy & Security
-- All facial data stays **local** on the device.
-- Only embeddings are compared in memory.
-- Use secure local file access for `faces/` and `database.db`.
-- Optionally encrypt or hash embeddings for production.
+1. Người dùng đăng nhập → hệ thống lấy thư mục khuôn mặt tương ứng.
+2. Khi bấm **Chấm công**, camera chụp lại 1 frame.
+3. YOLOv8 phát hiện khuôn mặt trong ảnh.
+4. DeepFace (ArcFace backend) so khớp khuôn mặt chụp được với các ảnh preset.
+5. Ghi log kết quả vào SQLite.
+6. Hiển thị kết quả trực tiếp trên GUI.
 
 ---
 
-## 🧰 Future Plans
-- [ ] Add “face registration” endpoint (`/api/enroll`)
-- [ ] Add liveness detection (blink/motion)
-- [ ] Containerize via Docker
-- [ ] Integrate with HRM / payroll microservices
+## 💡 Gợi ý mở rộng
+- Thêm **tính năng đăng ký khuôn mặt mới** trực tiếp trong GUI.
+- Lưu ảnh chụp mỗi lần chấm công.
+- Thêm **biểu đồ thống kê chấm công** (Pandas + Matplotlib).
+- Sau này có thể mở rộng sang **microservice API (FastAPI)** để tích hợp với phần mềm chấm công khác.
 
 ---
 
-## 🪶 License
-MIT License (or your preferred license).  
-Respect 3rd-party model licenses (YOLOv8, DeepFace, ArcFace).
-
----
-
-### 💡 Tips
-- For better performance, use **GPU (CUDA)** and **resize frames** to 640×480.
-- ArcFace backend in DeepFace gives the best accuracy/speed balance.
-- Keep each user’s images in separate folder: `faces/<user_id>/`.
+## 🪶 Giấy phép
+Dự án này mang tính học thuật và thử nghiệm.  
+Vui lòng tôn trọng giấy phép gốc của các mô hình:
+- [YOLOv8 (Ultralytics)](https://github.com/ultralytics/ultralytics)
+- [DeepFace](https://github.com/serengil/deepface)
+- [ArcFace (InsightFace)](https://github.com/deepinsight/insightface)

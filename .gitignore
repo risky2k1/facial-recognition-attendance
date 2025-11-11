@@ -1,0 +1,26 @@
+# Python venv
+venv/
+.env/
+__pycache__/
+*.pyc
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Logs and runtime data
+*.log
+*.csv
+database.db
+
+# Face data & sensitive info
+faces/
+temp_face.jpg
+
+# Model files
+*.pt
+*.onnx
+
+# OS-specific junk
+.DS_Store
+Thumbs.db

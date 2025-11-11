@@ -1,83 +1,193 @@
-# Facial Recognition Attendance (YOLO + DeepFace)
+# 🧠 Facial Recognition Attendance System (YOLO + DeepFace + FastAPI)
 
-Short, self-contained README for a facial-recognition attendance system that uses YOLO for face detection and DeepFace for face verification/recognition.
+## 🧾 Overview
+This project is an **offline facial-recognition attendance system** powered by **YOLO** (for face detection) and **DeepFace** (for face verification/recognition).  
+It can run locally with a GUI or expose REST APIs (via **FastAPI**) for integration with other systems — e.g., HR or employee management apps.
 
-## Project overview
-This repository implements an attendance system that:
-- Detects faces in live video or images using YOLO (object detection).
-- Verifies/recognizes faces using DeepFace embeddings and a matching strategy.
-- Logs attendance records (timestamp, identity, confidence) to CSV or a database.
+---
 
-## Features
-- Real-time face detection with YOLO (CPU/GPU).
-- Face embedding and recognition via DeepFace (supports multiple backends).
-- Simple enrollment workflow for registering new users.
-- Configurable thresholds, video source, and output formats.
+## 🚀 Features
+- **YOLOv8 Face Detection:** Real-time face detection via YOLO (CPU/GPU).
+- **DeepFace Recognition:** Face embedding + verification (supports ArcFace, Facenet, VGG-Face, etc.).
+- **SQLite-based logging:** Records each check-in with `user_id`, `timestamp`, `is_valid`, and `message`.
+- **FastAPI microservice:** Allows other apps to call face verification via HTTP API.
+- **Optional GUI (Tkinter):** For local interactive use and registration.
+- **Offline-first:** Runs fully on local machine — no cloud dependency.
 
-## Prerequisites
-- Python 3.8+
-- GPU recommended for real-time performance (CUDA if using PyTorch/CUDA GPU)
-- Basic packages: numpy, opencv-python, torch (if using PyTorch YOLO), deepface
+---
 
-## Installation
-1. Clone repository:
-    git clone <repo-url>
-2. Create virtual environment and activate it:
-    python -m venv .venv
-    .venv\Scripts\activate  # Windows
-    source .venv/bin/activate  # Linux / macOS
-3. Install dependencies:
-    pip install -r requirements.txt
+## 🧱 Architecture
+```
+📦 face-attendance/
+│
+├── faces/                 # Stored reference face images (by user)
+│   ├── user_1/
+│   │   └── tuan.jpg
+│   └── user_2/
+│       └── minh.jpg
+│
+├── yolov8n-face.pt        # YOLO model weights (for detection)
+├── database.db            # SQLite database (auto-created)
+│
+├── app/
+│   ├── main.py            # FastAPI microservice entry
+│   ├── recognize.py       # Core logic (YOLO + DeepFace)
+│   ├── gui.py             # Tkinter GUI (optional)
+│   ├── db.py              # SQLite database helpers
+│   ├── schemas.py         # Pydantic schemas for API
+│   └── utils.py           # Common utilities
+│
+├── requirements.txt
+├── README.md
+└── .gitignore
+```
 
-Example requirements (put in requirements.txt):
-- opencv-python
-- numpy
-- pandas
-- deepface
-- torch torchvision  # if using PyTorch based YOLO
-- yolov5  # or yolov8 / chosen YOLO implementation
+---
 
-## Configuration
-Configure settings in config.yaml or config.json:
-- model: path to YOLO weights or model name
-- deepface_backend: Facenet | VGG-Face | ArcFace | etc.
-- detection_threshold: float
-- recognition_threshold: float (embedding distance)
-- video_source: 0 | path/to/video.mp4
-- output_csv: path/to/attendance.csv
+## ⚙️ Installation
+```bash
+git clone <repo-url>
+cd face-attendance
 
-## Usage
-- Enroll a new user:
-  python enroll.py --name "Alice" --image path/to/alice.jpg
-  This builds a template embedding for later recognition.
+# Create venv (Python 3.10 recommended)
+python -m venv venv
+venv\Scripts\activate  # Windows
+# or
+source venv/bin/activate  # Linux/macOS
 
-- Run attendance capture (camera):
-  python attendance.py --source 0 --config config.yaml
+# Install dependencies
+pip install -r requirements.txt
+```
 
-- Run on a video file:
-  python attendance.py --source path/to/video.mp4 --config config.yaml
+### Example requirements.txt
+```text
+ultralytics==8.3.13
+deepface==0.0.93
+opencv-python==4.10.0.84
+torch>=2.0.0
+torchvision
+pandas
+numpy
+Pillow
+fastapi
+uvicorn
+```
 
-Outputs:
-- attendance.csv with rows: timestamp, id/name, confidence, frame_no
-- Optional annotated video or snapshots of detections
+---
 
-## Implementation notes
-- YOLO detects face bounding boxes; crop + align before passing to DeepFace.
-- Use a consistent embedding backend and normalization for reliable matching.
-- Set recognition_threshold experimentally per dataset (common range: 0.3–0.6 depending on backend).
-- For high accuracy, prefer ArcFace or Facenet backends and good-quality enrollment images.
+## ⚙️ Configuration
+You can define a JSON or YAML config file:
+```yaml
+model_path: yolov8n-face.pt
+deepface_backend: ArcFace
+recognition_threshold: 0.45
+db_path: database.db
+faces_dir: faces/
+```
 
-## Data and privacy
-- Store only required data (embeddings or hashed IDs) and secure access.
-- Obtain consent from subjects before capturing facial data.
-- Consider forgetting/retention policies for GDPR or local regulations.
+---
 
-## Troubleshooting
-- Low recognition accuracy: increase enrollment images per person, improve lighting, tune threshold.
-- Slow performance: enable GPU, reduce input resolution, use optimized YOLO variant.
-- Missing dependencies: verify installed versions and CUDA compatibility.
+## 💻 Run modes
 
-## License
-Include an appropriate license file (e.g., MIT) and respect third-party model licenses.
+### 🧍 GUI Local Mode
+```bash
+python app/gui.py
+```
+- Opens camera.
+- Detects & verifies faces in real-time.
+- Logs attendance to `database.db`.
 
-For more detailed implementation, add sections for file structure, API, and examples as the project evolves.
+### ⚙️ API Server Mode (FastAPI)
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Then visit [http://localhost:8000/docs](http://localhost:8000/docs) for interactive API docs.
+
+---
+
+## 🧩 Example FastAPI Endpoints
+
+### 1️⃣ Verify Face (Attendance Check)
+**POST** `/api/verify`
+
+**Request:**
+```json
+{
+  "user_id": 1,
+  "image_base64": "<base64-encoded-face-image>"
+}
+```
+
+**Response:**
+```json
+{
+  "verified": true,
+  "confidence": 0.87,
+  "timestamp": "2025-11-11T10:45:02",
+  "message": "Face matched successfully"
+}
+```
+
+### 2️⃣ List Attendance Logs
+**GET** `/api/logs`
+
+**Response:**
+```json
+[
+  {
+    "user_id": 1,
+    "timestamp": "2025-11-11T10:45:02",
+    "is_valid": 1,
+    "message": "Face matched successfully"
+  }
+]
+```
+
+---
+
+## 🧠 How It Works
+1. **YOLOv8** detects the face region.
+2. The detected face is cropped and aligned.
+3. **DeepFace** computes embedding vector and compares with stored reference images.
+4. If below threshold → `is_valid = 1` → save to `attendance_logs`.
+5. API returns verification result.
+
+---
+
+## 🗄️ SQLite Database Schema
+### Table: `users`
+| id | username | password | face_dir |
+|----|-----------|-----------|-----------|
+
+### Table: `attendance_logs`
+| id | user_id | timestamp | is_valid | message |
+
+---
+
+## 🔒 Privacy & Security
+- All facial data stays **local** on the device.
+- Only embeddings are compared in memory.
+- Use secure local file access for `faces/` and `database.db`.
+- Optionally encrypt or hash embeddings for production.
+
+---
+
+## 🧰 Future Plans
+- [ ] Add “face registration” endpoint (`/api/enroll`)
+- [ ] Add liveness detection (blink/motion)
+- [ ] Containerize via Docker
+- [ ] Integrate with HRM / payroll microservices
+
+---
+
+## 🪶 License
+MIT License (or your preferred license).  
+Respect 3rd-party model licenses (YOLOv8, DeepFace, ArcFace).
+
+---
+
+### 💡 Tips
+- For better performance, use **GPU (CUDA)** and **resize frames** to 640×480.
+- ArcFace backend in DeepFace gives the best accuracy/speed balance.
+- Keep each user’s images in separate folder: `faces/<user_id>/`.

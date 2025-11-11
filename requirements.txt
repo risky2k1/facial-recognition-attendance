@@ -6,5 +6,3 @@ torchvision
 pandas
 numpy
 Pillow
-tk
-sqlite3-binary
